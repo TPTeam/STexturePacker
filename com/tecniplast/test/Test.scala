@@ -8,10 +8,11 @@ import com.tecniplast.texturepacker.TextureCreator
 object Test extends App {
   println("Start")
   
-  val tc = new TextureCreator("/home/pietro909/workspaceJava/AvatarRenderer/out","./","dummy")
- 
+  //val tc = new TextureCreator("/home/pietro909/workspaceJava/AvatarRenderer/out","./","dummy")
+  val tc = new TextureCreator("out","./","result")
+  
   val node = tc.makeTree
-  tc.composeJson(node, 1024, 768)
+  tc.composeJson(node)
   tc.printTexture(node)
 
   println("End")
