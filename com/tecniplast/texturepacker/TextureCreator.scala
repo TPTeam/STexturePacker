@@ -11,26 +11,44 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
   if (!outputDir.exists()) {
     outputDir.mkdir();
   }
+  
   val outputTexture = new File(outputDir,outputFileName+".png")
   val outputJson = new File(outputDir,outputFileName+".json")
   
-  def makeTree: Node = {
-    val files = 
-    		inputDir.listFiles().toList
-
+ def makeTree: Node = {
+    val files = inputDir.listFiles().toList
+         
    	val first = 
    	  		ImageIO.read(files.head)
    	
+   	val nImages = files.length		
+   	  		
    	val root: Node = 
    	  		new Leaf(Rectangle(0,0,first.getWidth,first.getHeight),None)
-   	
-   	val result = parseFiles(root,files)
-  
+   	    
+   	val result = parseFiles(root,files,(first.getWidth,first.getHeight))
+    
    	(result) match {
       case Some(res) => res
-      case _ => throw new Exception("TextureCreator: No result found, integer limit reached?")
+      case _ => throw new Exception("No result found, integer limit reached?")
     }
   }
+  
+    
+  private def getAverages(list: List[File]): (Int, Int) =
+  {
+    val i = ImageIO.read(list.head)
+    (list.length) match
+    {
+    	case 1 => (i.getHeight, i.getWidth)
+    	case _ => 
+    	{
+    	  val v = getAverages(list.tail) 
+    	  (i.getHeight+v._1,i.getWidth+v._2)
+    	}
+    }     
+  }
+  
   
   def printTexture(root: Node) = {
     val printables = listResults(root)
@@ -50,8 +68,9 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
     ImageIO.write(sprite,"png" , outputTexture);
   }
   
-  def composeJson(root: Node, sourceWidth: Int, sourceHeight: Int): Unit = {
-    val printables = listResults(root).sortWith((l1,l2) => l1.image_name.compareTo(l2.image_name) < 0)
+  def composeJson(root: Node): Unit = {
+    val printables = listResults(root)
+    
     def _composeJson(prints: List[FullLeaf], res: String): String = {
       if (prints.isEmpty) 
         (res + "}," +
@@ -64,12 +83,10 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
         val l = prints.head
         val wh = "\"w\":"+l.rec.w+",\"h\":"+l.rec.h
         val json = 
-        			"\""+l.image_name.split("/").last +"\":{"+
+        			"\""+l.image_name+"\":{"+
         			"\"frame\":{\"x\":"+l.rec.x+",\"y\":"+l.rec.y+","+wh+"},"+
-        			//"\"rotated\": false, \"trimmed\": false,"+
-        			"\"rotated\": false, \"trimmed\": true,"+
-        			//"\"spriteSourceSize\":{\"x\":0,\"y\":0,"+wh+"},"+
-        			"\"spriteSourceSize\":{\"x\":0,\"y\":0,"+"\"w\":"+sourceWidth+",\"h\":"+sourceHeight+"},"+
+        			"\"rotated\": false, \"trimmed\": false,"+
+        			"\"spriteSourceSize\":{\"x\":0,\"y\":0,"+wh+"},"+
         			"\"sourceSize\" : {"+wh+"}"+
         			"}"
         val virg = 
@@ -101,7 +118,9 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
     }
   }
   
-  private def parseFiles(original_root: Node,original_fs: List[File]): Option[Node] = {
+  private def parseFiles(original_root: Node, original_fs: List[File], avg: (Int, Int)): Option[Node] = {
+    
+    
 		  def _parseFiles(root: Node, fs: List[File]): (Option[Node], Option[BufferedImage]) = {
 				  if (fs.isEmpty) (Some(root),None)
 				  else {
@@ -119,29 +138,59 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
 				  }
 		  }
 		  
-	val result = _parseFiles(original_root,original_fs)
+	val result = _parseFiles(original_root, original_fs)
 	(result) match {
 	  case (Some(res),_) => Some(res)
 	  case (_,Some(toAdd)) =>
-	   if (original_root.rec.w>original_root.rec.h) {
-			parseFiles(
+	   //if ((original_root.rec.w)>(original_root.rec.h)) {
+	  //   if((original_root.rec.w*(original_root.rec.h+toAdd.getHeight))<((original_root.rec.w+toAdd.getWidth)*original_root.rec.h)) { 
+	    	parseFiles(
+			   new Leaf(
+			       Rectangle(0,0,
+			           original_root.rec.w+((avg._2*6)/10),//toAdd.getWidth/3,
+			           original_root.rec.h+((avg._1*8)/10)),//toAdd.getHeight/3),
+			        None)
+			,original_fs,avg)
+	   //} else {
+	/*	    parseFiles(
+		    	new Leaf(
+				    Rectangle(0,0,
+				       original_root.rec.w+toAdd.getWidth,
+				       original_root.rec.h),
+				    None)
+			,original_fs) match {
+		      case Some(x) =>Some(x)
+		      case _ =>
+		        parseFiles(
 			   new Leaf(
 			       Rectangle(0,0,
 			           original_root.rec.w,
 			           original_root.rec.h+toAdd.getHeight),
 			        None)
 			,original_fs)
-	   } else {
-		    parseFiles(
+		    }
+			} */
+			/*)
+			match
+			{
+			  case (Some(w),Some(h)) => 
+			    if((original_root.rec.w*(original_root.rec.h+toAdd.getHeight))>((original_root.rec.w+toAdd.getWidth)*original_root.rec.h)) 
+			      Some(w)
+			    else
+			      Some(h)
+			  case (Some(w),None) => Some(w)
+			  case (None,Some(h)) => Some(h)
+			  case _ => parseFiles(
 		    	new Leaf(
 				    Rectangle(0,0,
 				       original_root.rec.w+toAdd.getWidth,
-				       original_root.rec.h),
-				    None)
-			,original_fs)
-	   }
+				       original_root.rec.h+toAdd.getHeight),
+				    None),original_fs)
+			  
+			}*/
+	   //}
 	  case _ => None
 	}
   }
 
-}
+}  

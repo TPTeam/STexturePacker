@@ -28,14 +28,36 @@ case class Tree(rect: Rectangle,
   
 }
 
-class Leaf(rect: Rectangle,
-				image_name: Option[String]
-				) extends Node(rect) {
+case class OptionTree(rect: Rectangle,  w: Int, h: Int) extends Node(rect) {
+  
+  val tree1 = Tree(rect,
+    	    	       EmptyLeaf(Rectangle(rect.x+w,rect.y,rect.w-w,h)),
+    	    	       EmptyLeaf(Rectangle(rect.x,rect.y+h,rect.w,rect.h-h))
+    	    	       )
+    	    	       
+  val tree2 = Tree(rect,
+    	    	       EmptyLeaf(Rectangle(rect.x,rect.y+h,w,rect.h-h)),
+    	    	       EmptyLeaf(Rectangle(rect.x+w,rect.y,rect.w-w,rect.h))
+    	    	       )
+
+  def insert(imageName: String, w: Int, h: Int): Option[Node] =
+    tree1.insert(imageName,w,h) match {
+    case t1 @ Some(_) => 
+      t1
+    case _ =>
+      tree2.insert(imageName,w,h)
+  }    
+}
+
+class Leaf(rect: Rectangle,	image_name: Option[String]) extends Node(rect)
+{
+  
   def insert(imageName: String, w: Int, h: Int): Option[Node] =
 	if (image_name.isDefined) None		// busy
     else if (rect.w == w && rect.h == h) Some(FullLeaf(rect,imageName))	// fullfilled leaf
-    else if (rect.w>=w && rect.h>=h) {	//becoming tree
-      if ((rect.w - w) > (rect.h - h)) //split orizz
+    else if (rect.w>=w && rect.h>=h)
+    {	//becoming tree
+      /*if ((rect.w - w) > (rect.h - h)) //split orizz
     	  Some(
     	      Tree(rect,
     	    	   Tree(rect,
@@ -45,7 +67,7 @@ class Leaf(rect: Rectangle,
     	    	   FullLeaf(Rectangle(rect.x,rect.y,w,h), imageName)
     			  )
     		)
-      else							//split vert
+      else							  //split vert
     	  Some(
     	      Tree(rect,
     	    	   Tree(rect,
@@ -54,15 +76,20 @@ class Leaf(rect: Rectangle,
     	    	       ),
     	    	   FullLeaf(Rectangle(rect.x,rect.y,w,h), imageName)
     			  )
-    		)
-    } else None 
+    		)*/
+      Some(
+          Tree(rect,
+          OptionTree(rect, w, h),
+          FullLeaf(Rectangle(rect.x,rect.y,w,h), imageName)
+          ))
+    } 
+    else None 
 }
 
-case class FullLeaf(rect: Rectangle,
-					image_name: String
-				) extends Leaf(rect,Some(image_name))
-case class EmptyLeaf(rect: Rectangle
-				) extends Leaf(rect,None)
+case class FullLeaf(rect: Rectangle, image_name: String) extends Leaf(rect,Some(image_name))
+
+case class EmptyLeaf(rect: Rectangle) extends Leaf(rect,None)
+
 
 case class Rectangle(x: Int,y: Int,w: Int,h: Int) {
   override def toString() = {
