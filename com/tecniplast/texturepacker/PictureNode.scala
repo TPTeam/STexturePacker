@@ -51,6 +51,7 @@ case class OptionTree(rect: Rectangle,  w: Int, h: Int) extends Node(rect) {
 
 class Leaf(rect: Rectangle,	image_name: Option[String]) extends Node(rect)
 {
+  def getImageName = image_name
   
   def insert(imageName: String, w: Int, h: Int): Option[Node] =
 	if (image_name.isDefined) None		// busy

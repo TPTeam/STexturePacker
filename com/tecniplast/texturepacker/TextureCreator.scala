@@ -16,7 +16,7 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
   val outputJson = new File(outputDir,outputFileName+".json")
   
  def makeTree: Node = {
-    val files = inputDir.listFiles().toList
+    implicit val files = inputDir.listFiles().toList
          
    	val first = 
    	  		ImageIO.read(files.head)
@@ -26,29 +26,55 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
    	val root: Node = 
    	  		new Leaf(Rectangle(0,0,first.getWidth,first.getHeight),None)
    	    
-   	val result = parseFiles(root,files,(first.getWidth,first.getHeight))
-    
+   	val result = parseFiles(root,files)
+   	
    	(result) match {
-      case Some(res) => res
+      case Some(res) => 
+        val better = makeItBetter(res)
+        println("ESCIII!!!")
+        better
       case _ => throw new Exception("No result found, integer limit reached?")
     }
-  }
+  }  
   
+  def makeItBetter(last_result: Node)(implicit fl: List[File]): Node = {
+    val lessW =
+      new Leaf(Rectangle(0,0,last_result.rec.w-1,last_result.rec.h),None)
+    val lessH =
+      new Leaf(Rectangle(0,0,last_result.rec.w,last_result.rec.h-1),None)
     
-  private def getAverages(list: List[File]): (Int, Int) =
-  {
-    val i = ImageIO.read(list.head)
-    (list.length) match
-    {
-    	case 1 => (i.getHeight, i.getWidth)
-    	case _ => 
-    	{
-    	  val v = getAverages(list.tail) 
-    	  (i.getHeight+v._1,i.getWidth+v._2)
-    	}
-    }     
+    val resLessH =
+      parseFiles(lessH,fl).map(x => {
+       if (x.rec.h+x.rec.w > last_result.rec.h+last_result.rec.w)
+         None
+       else 
+         Some(x)
+      }).flatten
+    val resLessW =
+      parseFiles(lessW,fl).map(x => {
+       if (x.rec.h+x.rec.w > last_result.rec.h+last_result.rec.w)
+         None
+       else 
+         Some(x)
+      }).flatten
+      
+
+    println("Making better! Last_result is "+last_result.rec)
+    (resLessH,resLessW) match {
+      case (Some(rlh),Some(rlw)) =>
+        if (rlh.rec.w>rlw.rec.w)
+          makeItBetter(rlh)
+        else
+          makeItBetter(rlw)
+      case (Some(rlh),None) =>
+        makeItBetter(rlh)
+      case (None,Some(rlw)) =>
+        makeItBetter(rlw)
+      case _ =>
+        println("Nothing can be done better...")
+        last_result
+    }
   }
-  
   
   def printTexture(root: Node) = {
     val printables = listResults(root)
@@ -118,12 +144,13 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
     }
   }
   
-  private def parseFiles(original_root: Node, original_fs: List[File], avg: (Int, Int)): Option[Node] = {
+  private def parseFiles(original_root: Node, original_fs: List[File]): Option[Node] = {
     
     
 		  def _parseFiles(root: Node, fs: List[File]): (Option[Node], Option[BufferedImage]) = {
-				  if (fs.isEmpty) (Some(root),None)
-				  else {
+				  if (fs.isEmpty) {
+				    (Some(root),None)
+				  } else {
 					val file = fs.head
 					val imageName = file.getAbsolutePath
 					val toAdd = ImageIO.read(file)
@@ -131,64 +158,124 @@ case class TextureCreator(inputDirName: String, outputDirName: String, outputFil
       
 					(new_root) match {
 						case Some(nr) => 
-							_parseFiles(nr,fs.tail)
+						  _parseFiles(nr,fs.tail)
 						case _ =>
 						  (None,Some(toAdd))
 					}
 				  }
 		  }
 		  
+		  def parse(n: Node): List[Rectangle] = {
+		    n match {
+		      case l: Leaf => parseL(l)
+		      case ot: OptionTree => parseOT(ot)
+		      case t: Tree => parseT(t)
+		    }
+		  }
+		  
+		  def parseL(in: Leaf): List[Rectangle] = {
+		    in.getImageName match {
+		      case Some(name) => List()
+		      case _ => List(in.rec)
+		    }
+		  }
+		  
+		  def parseOT(ot: OptionTree) = (
+		      parse(ot.tree1.l) :::
+		      parse(ot.tree1.r) :::
+		      parse(ot.tree2.l) :::
+		      parse(ot.tree2.r)
+		  )
+		  
+		  def parseT(in: Tree): List[Rectangle] = {
+		      parse(in.l) :::
+		      parse(in.r)
+		  }
+		  
+		  
 	val result = _parseFiles(original_root, original_fs)
 	(result) match {
-	  case (Some(res),_) => Some(res)
+	  case (Some(res),_) => Some(res)	  
 	  case (_,Some(toAdd)) =>
-	   //if ((original_root.rec.w)>(original_root.rec.h)) {
-	  //   if((original_root.rec.w*(original_root.rec.h+toAdd.getHeight))<((original_root.rec.w+toAdd.getWidth)*original_root.rec.h)) { 
-	    	parseFiles(
+	    val desiredH = toAdd.getHeight()
+	    val desiredW = toAdd.getWidth()
+	    
+	    val rects = parse(original_root)
+	    
+	    def findClosest(in: List[Rectangle], actual: Option[Rectangle]): Option[Rectangle] = {
+	      if (in.isEmpty) actual
+	      else {
+	        val margin = 
+	        		Math.abs(desiredH - in.head.h) +
+	        		Math.abs(desiredW - in.head.w)
+	        		
+	        actual match {
+	          case Some(a) =>
+	            val actualMargin = 
+	              Math.abs(desiredH - a.h) +
+	        	  Math.abs(desiredW - a.w)
+	        	  
+	          	if (actualMargin > margin)
+	          		findClosest(in.tail, actual)
+	            else
+	                findClosest(in.tail, Some(in.head))
+	          case _  =>
+	            findClosest(in.tail, None)
+	        } 
+	      }
+	    }
+	    val closest = findClosest(rects,None)
+	    
+	    val plusH =
+	      if (closest.isDefined)
+	    	  closest.get.h - desiredH
+	      else
+	    	  desiredH
+	    val plusW =
+	      if (closest.isDefined)
+	    	 closest.get.w - desiredW
+	      else
+	    	 desiredW   
+
+	    println("Actual rectangle "+original_root.rec)
+	    	 
+	    if ((original_root.rec.w) > (original_root.rec.h*2) ||
+	        (original_root.rec.w*2) > (original_root.rec.h)
+	        ) {
+	      if (plusH < plusW) {
+	    	  parseFiles(
 			   new Leaf(
 			       Rectangle(0,0,
-			           original_root.rec.w+((avg._2*6)/10),//toAdd.getWidth/3,
-			           original_root.rec.h+((avg._1*8)/10)),//toAdd.getHeight/3),
+			           (original_root.rec.w+original_root.rec.h)/2,
+			           ((original_root.rec.w+original_root.rec.h)/2)+plusH),
 			        None)
-			,original_fs,avg)
-	   //} else {
-	/*	    parseFiles(
-		    	new Leaf(
-				    Rectangle(0,0,
-				       original_root.rec.w+toAdd.getWidth,
-				       original_root.rec.h),
-				    None)
-			,original_fs) match {
-		      case Some(x) =>Some(x)
-		      case _ =>
-		        parseFiles(
+			,original_fs)
+	      } else {
+	        parseFiles(
+			   new Leaf(
+			       Rectangle(0,0,
+			           ((original_root.rec.w+original_root.rec.h)/2)+plusW,
+			           (original_root.rec.w+original_root.rec.h)/2),
+			        None)
+			,original_fs)
+	      }
+	    } else if (plusH < plusW) {
+	      parseFiles(
 			   new Leaf(
 			       Rectangle(0,0,
 			           original_root.rec.w,
-			           original_root.rec.h+toAdd.getHeight),
+			           original_root.rec.h+plusH),
 			        None)
 			,original_fs)
-		    }
-			} */
-			/*)
-			match
-			{
-			  case (Some(w),Some(h)) => 
-			    if((original_root.rec.w*(original_root.rec.h+toAdd.getHeight))>((original_root.rec.w+toAdd.getWidth)*original_root.rec.h)) 
-			      Some(w)
-			    else
-			      Some(h)
-			  case (Some(w),None) => Some(w)
-			  case (None,Some(h)) => Some(h)
-			  case _ => parseFiles(
-		    	new Leaf(
-				    Rectangle(0,0,
-				       original_root.rec.w+toAdd.getWidth,
-				       original_root.rec.h+toAdd.getHeight),
-				    None),original_fs)
-			  
-			}*/
-	   //}
+	    } else {
+	      parseFiles(
+			   new Leaf(
+			       Rectangle(0,0,
+			           original_root.rec.w+plusW,
+			           original_root.rec.h),
+			        None)
+		  ,original_fs)
+	    }	    	
 	  case _ => None
 	}
   }
